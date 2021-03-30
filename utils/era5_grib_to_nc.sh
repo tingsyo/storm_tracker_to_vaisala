@@ -36,7 +36,8 @@ for f in $SRCPATH/atm-*.grib; do
     fname=${fname:4:12}
     for i in "${!gribidx[@]}"; do
         outfile=$OUTPATH/$fname"${surfix[$i]}"
-        wgrib $f -d "${gribidx[$i]}" -grib > grib_to_netcdf -o $outfile
+        wgrib $f -d "${gribidx[$i]}" -grib -o tmp.grb 
+        grib_to_netcdf -o $outfile tmp.grb
     done
 done
     
