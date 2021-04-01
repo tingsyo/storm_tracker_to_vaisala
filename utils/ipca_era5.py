@@ -36,10 +36,10 @@ def list_era5_files(dir, suffix='.nc'):
     import os
     import pandas as pd
     xfiles = []
-    for root, dirs, files in os.walk(dir, followlinks=True):  # Loop through the directory
+    for root, dirs, files in os.walk(dir, followlinks=True):    # Loop through the directory
         for fn in files:
-            if fn.endswith(suffix):                 # Filter files with suffix
-                timestamp = fn.replace(suffix,'')   # Removing the suffix to get time-stamp
+            if fn.endswith(suffix):                             # Filter files with suffix
+                timestamp = fn.replace(suffix,'')[:10]          # Removing the suffix to get time-stamp
                 xfiles.append({'timestamp':timestamp, 'xuri':os.path.join(root, fn)})
     return(pd.DataFrame(xfiles).sort_values('timestamp').reset_index(drop=True))
 
@@ -87,8 +87,8 @@ def fit_ipca_partial(finfo, n_component=20, batch_size=128, rseed=0):
     while batch_start < nSample:
         logging.debug('Starting batch: '+str(batch_count))
         # Check bound
-        limit = min(batch_end, nSample)         # Check for the final batch
-        if n_component>(nSample-batch_end):     # Merge the final batch if it's too small
+        limit = min(batch_end, nSample)             # Check for the final batch
+        if n_component>(nSample-batch_end):         # Merge the final batch if it's too small
             logging.info('The final batch is too small, merge it to the previous batch.')
             limit = nSample
         # Read batch data
@@ -103,6 +103,38 @@ def fit_ipca_partial(finfo, n_component=20, batch_size=128, rseed=0):
     #
     return(ipca)
 
+# Incremental PCA
+def transform_ipca_partial(finfo, model, batch_size=128):
+    ''' Transform the data by batch with trained incremental PCA. '''
+    # Loop through finfo
+    nSample = len(finfo)
+    batch_start = 0
+    batch_end = batch_size
+    batch_count = 0
+    # Output
+    proj_full = None
+    while batch_start < nSample:
+        logging.debug('Starting batch: '+str(batch_count))
+        # Check bound
+        limit = min(batch_end, nSample)             # Check for the final batch
+        if n_component>(nSample-batch_end):         # Merge the final batch if it's too small
+            logging.info('The final batch is too small, merge it to the previous batch.')
+            limit = nSample
+        # Read batch data
+        data = read_multiple_era5(finfo['xuri'].iloc[batch_start:limit], flatten=True)
+        logging.debug(data.shape)
+        # increment
+        batch_start = limit   
+        batch_end = limit + batch_size
+        batch_count += 1
+        # Partial transform with batch data
+        proj_batch = model.transform(data)
+        if proj_full is None:
+            proj_full = proj_batch
+        else:
+            proj_full = np.vstack(proj_full, proj_batch)
+    #
+    return(proj_full)
 
 def writeToCsv(output, fname, header=None):
     # Overwrite the output file:
@@ -132,11 +164,16 @@ def main():
     logging.debug(args)
     # Get data files
     logging.info('Scanning data files.')
-    datainfo = list_era5_files(args.datapath)
+    datainfo = list_era5_files(args.datapath, suffix='.nc')
     #datainfo.to_csv(args.output+'.file_info.csv', index=False)
     # IncrementalPCA
     logging.info("Performing IncrementalPCA with "+ str(args.n_component)+" components and batch size of " + str(args.batch_size))
     ipca = fit_ipca_partial(datainfo, n_component=args.n_component, batch_size=args.batch_size, rseed=args.random_seed)
+    # Project the data by batch
+    projections = transform_ipca_partial(datainfo, model=ipca, batch_size=args.batch_size)
+    projdf = pd.DataFrame(projections)
+    projdf['timestamp'] = datainfo['timestamp']
+    projdf.to_csv(args.output+".proj.csv", index=False)
     # Preparing output
     ev = ipca.explained_variance_
     evr = ipca.explained_variance_ratio_
@@ -145,7 +182,7 @@ def main():
     # Output components
     com_header = ['pc'+str(x+1) for x in range(args.n_component)]
     #writeToCsv(com, args.output+'.components.csv', header=com_header)
-    pd.DataFrame({'ev':ev, 'evr':evr}).to_csv(args.output+'.exp_var.csv')
+    #pd.DataFrame({'ev':ev, 'evr':evr}).to_csv(args.output+'.exp_var.csv')
     # Output fitted IPCA model
     joblib.dump(ipca, args.output+".pca.mod")
     # done
