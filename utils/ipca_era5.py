@@ -107,6 +107,7 @@ def fit_ipca_partial(finfo, n_component=20, batch_size=128, rseed=0):
 def transform_ipca_partial(finfo, model, batch_size=128):
     ''' Transform the data by batch with trained incremental PCA. '''
     # Loop through finfo
+    n_component = model.n_components_
     nSample = len(finfo)
     batch_start = 0
     batch_end = batch_size
@@ -132,7 +133,7 @@ def transform_ipca_partial(finfo, model, batch_size=128):
         if proj_full is None:
             proj_full = proj_batch
         else:
-            proj_full = np.vstack(proj_full, proj_batch)
+            proj_full = np.vstack([proj_full, proj_batch])
     #
     return(proj_full)
 
@@ -172,7 +173,7 @@ def main():
     # Project the data by batch
     projections = transform_ipca_partial(datainfo, model=ipca, batch_size=args.batch_size)
     projdf = pd.DataFrame(projections)
-    projdf['timestamp'] = datainfo['timestamp']
+    projdf.insert(0, 'timestamp', datainfo['timestamp'])
     projdf.to_csv(args.output+".proj.csv", index=False)
     # Preparing output
     ev = ipca.explained_variance_
