@@ -1,2 +1,5 @@
 .ipynb_checkpoints
-era5
+data/cwb
+data/era5
+data/svd
+data/pca_era5
