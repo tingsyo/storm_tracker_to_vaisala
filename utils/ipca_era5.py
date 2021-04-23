@@ -78,7 +78,7 @@ def fit_ipca_partial(finfo, n_component=20, batch_size=128, rseed=0):
         flist = flist.sample(frac=1, random_state=rseed).reset_index(drop=True)
         logging.info('Shuffling the input data for batch processing with random seed: '+str(rseed))
     # Initialize the PCA object
-    ipca = IncrementalPCA(n_components=n_component, batch_size=batch_size)
+    ipca = IncrementalPCA(n_components=n_component, whiten=True, batch_size=batch_size)
     # Loop through finfo
     nSample = len(finfo)
     batch_start = 0
